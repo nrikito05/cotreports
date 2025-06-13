@@ -23,36 +23,19 @@ MARKETS = {
 
 def get_cot_data():
     url = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_2024.zip"
-    r = requests.get(url)
-    z = zipfile.ZipFile(io.BytesIO(r.content))
-    txtfile = z.open(z.namelist()[0])
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+    }
     
-    df = pd.read_csv(txtfile, sep=",", engine='python')
-    return df
-
-@app.get("/api/cot/{symbol}")
-async def get_symbol_data(symbol: str):
-    df = get_cot_data()
-    
-    if symbol.upper() not in MARKETS:
-        return {"error": "Símbolo no soportado"}
-    
-    code = MARKETS[symbol.upper()]
-    filtered = df[df['CFTC Contract Market Code'].astype(str) == code]
-    
-    if filtered.empty:
-        return {"error": "No se encontraron datos para este activo"}
-    
-    result = filtered[[
-        'Report_Date_as_YYYY-MM-DD',
-        'Prod_Desc',
-        'Noncommercial_Long_All',
-        'Noncommercial_Short_All',
-        'Noncommercial_Spreading_All'
-    ]].sort_values('Report_Date_as_YYYY-MM-DD', ascending=False).to_dict(orient="records")
-    
-    return result
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()  # Lanza excepción si hubo error HTTP
+        
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        txtfile = z.open(z.namelist()[0])
+        
+        df = pd.read_csv(txtfile, sep=",", engine='python', on_bad_lines='skip')
+        return df
+    except Exception as e:
+        print(f"Error al descargar o procesar COT: {e}")
+        raise
